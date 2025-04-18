@@ -1,8 +1,0 @@
-{
-    "election_timeout": "1000ms",
-    "heartbeat_timeout": "500ms",
-    "commit_timeout": "50ms",
-    "max_append_entries": 64,
-    "snapshot_interval": "2m"
-}
-
