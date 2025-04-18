@@ -1,11 +1,14 @@
 package main
 
 import (
+    "encoding/json"
     "flag"
     "fmt"
     "log"
+    "net/http"
     "os"
     "path/filepath"
+    "time"
 
     "github.com/hashicorp/raft"
     "github.com/hashicorp/raft-boltdb"
@@ -53,8 +56,11 @@ func main() {
         log.Fatalf("Failed to create transport: %v", err)
     }
 
+    // Initialize the state machine
+    stateMachine := NewStateMachine(dataDir)
+
     // Create Raft instance
-    raftInstance, err := raft.NewRaft(config, nil, logStore, stableStore, snapshotStore, transport)
+    raftInstance, err := raft.NewRaft(config, stateMachine, logStore, stableStore, snapshotStore, transport)
     if err != nil {
         log.Fatalf("Failed to create Raft instance: %v", err)
     }
@@ -70,7 +76,9 @@ func main() {
                 },
             },
         }
-        raftInstance.BootstrapCluster(configuration)
+        if err := raftInstance.BootstrapCluster(configuration).Error(); err != nil {
+            log.Fatalf("Failed to bootstrap cluster: %v", err)
+        }
         log.Println("Bootstrapped the cluster as the first node")
     } else {
         // Join the cluster
@@ -84,6 +92,43 @@ func main() {
         log.Fatalf("Failed to create ready file: %v", err)
     }
     log.Printf("NodeApplication is ready. Ready file created at %s\n", readyFile)
+
+    // HTTP endpoint to handle client requests
+    http.HandleFunc("/execute", func(w http.ResponseWriter, r *http.Request) {
+        if raftInstance.State() != raft.Leader {
+            http.Error(w, "Not the leader", http.StatusForbidden)
+            return
+        }
+
+        var command map[string]string
+        if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
+            http.Error(w, "Invalid request body", http.StatusBadRequest)
+            return
+        }
+
+        data, err := json.Marshal(command)
+        if err != nil {
+            http.Error(w, "Failed to marshal command", http.StatusInternalServerError)
+            return
+        }
+
+        applyFuture := raftInstance.Apply(data, 10*time.Second)
+        if err := applyFuture.Error(); err != nil {
+            http.Error(w, fmt.Sprintf("Failed to apply command: %v", err), http.StatusInternalServerError)
+            return
+        }
+
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, "Command applied successfully")
+    })
+
+    // Start the HTTP server
+    go func() {
+        log.Printf("Starting HTTP server on port %d", *port+1000) // HTTP server on port offset by 1000
+        if err := http.ListenAndServe(fmt.Sprintf(":%d", *port+1000), nil); err != nil {
+            log.Fatalf("Failed to start HTTP server: %v", err)
+        }
+    }()
 
     // Keep the node running
     select {}
