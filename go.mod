@@ -3,10 +3,11 @@ module github.com/KushalP47/raft-cluster
 go 1.23.3
 
 require (
-	github.com/boltdb/bolt v1.3.1
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb v0.0.0-20250225060035-8f7048cdfa53
 )
+
+require github.com/boltdb/bolt v1.3.1 // indirect
 
 require (
 	github.com/armon/go-metrics v0.4.1 // indirect

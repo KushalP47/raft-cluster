@@ -36,6 +36,8 @@ func AddNodeHandler(nodeManager *manager.NodeManager) http.HandlerFunc {
             leaderAddr = fmt.Sprintf("127.0.0.1:%d", leader)
         }
 
+        fmt.Printf("Node %d will join leader %s\n", port, leaderAddr)
+
         // Add the node to the cluster using the NodeManager
         if err := nodeManager.AddNode(port, leaderAddr == ""); err != nil {
             http.Error(w, fmt.Sprintf("Failed to add node: %v", err), http.StatusInternalServerError)
